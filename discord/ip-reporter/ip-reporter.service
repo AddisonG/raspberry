@@ -1,0 +1,22 @@
+[Unit]
+Description=IP Reporter
+
+# Attempt to restart service forever
+StartLimitIntervalSec=0
+
+[Service]
+Type=forking
+User=pi
+
+# See daemon.py
+PIDFile=/run/user/1000/ip-reporter/pid
+
+# Attempt to restart stopped service every X seconds
+RestartSec=30
+Restart=always
+ExecStart=/home/pi/projects/discord/ip-reporter/ip-reporter.py start
+ExecStop=/home/pi/projects/discord/ip-reporter/ip-reporter.py stop
+
+[Install]
+#WantedBy=
+#Alias=
