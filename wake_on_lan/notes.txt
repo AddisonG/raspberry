@@ -1,0 +1,59 @@
+You're in for a bad time Addison - As always, I'd set as much as possible, and then tone it back.
+First, you want to check the UEFI settings, and make sure that they're good. There might be a few.
+You don't need to shutdown the computer in any special way, depending on the motherboard.
+If it can wake from S4 (deepest sleep), and S5 (complete poweroff), then that's what you want.
+You need to make sure that the ethernet device is still blinking, even while the PC is off.
+To do that, the following settings will be needed:
+Don't bother with fancy scripts to send wake-on-lan packets. Just apt install wakeonlan.
+
+
+1)
+Make sure that `/etc/default/halt` contains:
+
+```
+NETDOWN=no
+```
+
+2)
+Make a file here `/etc/systemd/network/50-wired.link`, or something similar.
+Check that other ones don't override it.
+
+```
+[Match]
+MACAddress=70:85:c2:7c:13:96
+
+[Link]
+Name=eno1
+WakeOnLan=magic
+```
+
+3)
+Use ethtool to check the status of your device, and enable/disable listening TEMPORARILY:
+
+	# List info about <eno1> device
+	sudo ethtool eno1
+
+	# Set Wake On Lan for magic packet only. man ethtool for more.
+	sudo ethtool -s eno1 wol g
+
+You may need to make this run on start^
+Strangely, i did not end up running this anywhere - it appears that the previous was enough
+If you want to, the ethtool command can go in /etc/network/interfaces (google how)
+It can also go in other /etc/ things that run on boot, so I hear
+
+4)
+Getting desperate? This is probably unneeded, but you can try this. I actually did it, so maybe it's needed.
+
+	nmcli connection modify "MY_NET_CONN" 802-3-ethernet.wake-on-lan magic
+
+
+
+I initially made some changes to these files, but in the end, no changes were needed to:
+
+	/etc/default/acpi-support
+
+	/etc/default/acpid
+
+	/etc/network/interfaces
+
+Good luck
