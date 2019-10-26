@@ -37,7 +37,7 @@ class raspbot(daemon):
                     break
 
     @bot.command()
-    async def add(ctx, song_name):
+    async def add(ctx, *, song_name):
         """Adds a song to the database."""
         try:
             raspbot.add_song(song_name)
@@ -46,8 +46,8 @@ class raspbot(daemon):
             return
         await ctx.send("Added song '{}'.".format(song_name))
 
-    @bot.command()
-    async def remove(ctx, song_name):
+    @bot.command(name='remove')
+    async def remove(ctx, *, song_name):
         """Removes a song from the database."""
         try:
             raspbot.remove_song(song_name)
@@ -56,12 +56,12 @@ class raspbot(daemon):
             return
         await ctx.send("Removed song '{}'.".format(song_name))
 
-    @bot.command()
+    @bot.command(name='delete')
     async def delete(ctx):
         raspbot.remove(ctx)
 
-    @bot.command()
-    async def list(ctx):
+    @bot.command(name='list')
+    async def list_all(ctx):
         """Lists all the songs in the database."""
         try:
             await ctx.send(raspbot.list_songs())
@@ -70,10 +70,14 @@ class raspbot(daemon):
             return
 
     @bot.command()
-    async def random(ctx):
-        """Randomly selects a song from the database."""
+    async def random(ctx, *tags):
+        """Randomly selects a song from the database, with the given tag.
+        Please only supply one tag - only the first is read."""
         try:
-            await ctx.send(raspbot.random_song())
+            if tags:
+                await ctx.send(raspbot.random_song(tags[0]))
+            else:
+                await ctx.send(raspbot.random_song())
         except Exception as e:
             await ctx.send("Error getting random song: " + str(e))
             return
@@ -83,47 +87,70 @@ class raspbot(daemon):
     ############################################################################
 
     @staticmethod
-    def add_song(name):
-        with sqlite3.connect("raspbot.db") as db:
+    def add_song(song):
+        # This method is nearly my username - addisong!
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
             try:
                 cur = db.cursor()
-                cur.execute("""INSERT INTO songs (name) VALUES (?)""", [name])
+                cur.execute("""INSERT INTO songs (song) VALUES (?)""", [song])
             except Exception as e:
                 db.rollback()
                 raise e
 
     @staticmethod
-    def remove_song(name):
-        with sqlite3.connect("raspbot.db") as db:
+    def remove_song(song):
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
             try:
                 cur = db.cursor()
-                cur.execute("""DELETE FROM songs WHERE name = ?""", [name])
+                cur.execute("""DELETE FROM songs WHERE song = ?""", [song])
             except Exception as e:
                 db.rollback()
                 raise e
 
     @staticmethod
     def list_songs():
-        rows = None
-        with sqlite3.connect("raspbot.db") as db:
+        songs = None
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
             try:
                 cur = db.cursor()
-                cur.execute("""SELECT name FROM songs""")
-                rows = cur.fetchall()
+                cur.execute("""SELECT song FROM songs""")
+                songs = cur.fetchall()
+                # cur.execute("""SELECT (song, tag) FROM song_tag_map""")
+                # song_tag_map = cur.fetchall()
             except Exception as e:
                 db.rollback()
                 raise e
         table = ""
-        for row in rows:
-            table += row[0] + "\n"
+        for song in songs:
+            # TODO FIXME
+            table += song[0] + "\n"
         return table if table else "No songs yet."
 
     @staticmethod
-    def random_song():
-        with sqlite3.connect("raspbot.db") as db:
+    def list_tags():
+        tags = None
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
             try:
                 cur = db.cursor()
-                cur.execute("""SELECT name FROM songs""")
+                cur.execute("""SELECT tag FROM tags""")
+                tags = cur.fetchall()
+            except Exception as e:
+                db.rollback()
+                raise e
+        table = ""
+        for tag in tags:
+            table += tag[0] + "\n"
+        return table if table else "No tags yet."
+
+    @staticmethod
+    def random_song(tag=None):
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
+            try:
+                cur = db.cursor()
+                if tag is not None:
+                    cur.execute("""SELECT song FROM song_tag_map where tag = ?""", [tag])
+                else:
+                    cur.execute("""SELECT song FROM songs""")
                 rows = cur.fetchall()
             except Exception as e:
                 db.rollback()
@@ -132,8 +159,39 @@ class raspbot(daemon):
 
     @staticmethod
     def setup(self):
-        """CREATE TABLE songs (name TEXT(100) PRIMARY KEY);"""
-        pass
+        with sqlite3.connect("/home/pi/projects/discord/raspbot/raspbot.db") as db:
+            try:
+                cur = db.cursor()
+
+                cur.execute("""
+                    PRAGMA foreign_keys = 1;
+                """)
+
+                cur.execute("""
+                    CREATE TABLE songs (
+                        song TEXT(100) NOT NULL PRIMARY KEY
+                    );
+                """)
+
+                cur.execute("""
+                    CREATE TABLE tags (
+                        tag TEXT(100) NOT NULL PRIMARY KEY
+                    );
+                """)
+
+                cur.execute("""
+                    CREATE TABLE song_tag_map (
+                        song TEXT(100) NOT NULL,
+                        tag TEXT(100),
+                        PRIMARY KEY (song, tag),
+                        FOREIGN KEY (song) REFERENCES songs(song) ON DELETE CASCADE,
+                        FOREIGN KEY (tag) REFERENCES tags(tag) ON DELETE CASCADE
+                    );
+                """)
+            except Exception as e:
+                db.rollback()
+                raise e
+        return "Setup complete."
 
     def run(self):
         """ This overrides the daemon run method."""
