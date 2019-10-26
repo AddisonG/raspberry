@@ -18,5 +18,5 @@ ExecStart=/home/pi/projects/discord/ip-reporter/ip-reporter.py start
 ExecStop=/home/pi/projects/discord/ip-reporter/ip-reporter.py stop
 
 [Install]
-#WantedBy=
+WantedBy=multi-user.target
 #Alias=

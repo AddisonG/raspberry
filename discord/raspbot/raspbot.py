@@ -4,6 +4,8 @@ from discord.ext import commands
 import sys
 import time
 import subprocess
+import sqlite3
+import random
 
 sys.path.append('/home/pi/projects/daemonizer')
 from daemon import daemon
@@ -35,12 +37,103 @@ class raspbot(daemon):
                     break
 
     @bot.command()
-    async def uptime(ctx):
-        """Prints the uptime of the server and this service."""
-        sys_uptime = subprocess.check_output('uptime -p', shell=True).rstrip()
-        srv_uptime = time.time() - raspbot.start_time
-        await ctx.send("System Uptime: {}\nService Uptime: {} seconds"
-            .format(sys_uptime, srv_uptime))
+    async def add(ctx, song_name):
+        """Adds a song to the database."""
+        try:
+            raspbot.add_song(song_name)
+        except Exception as e:
+            await ctx.send("Error adding song: " + str(e))
+            return
+        await ctx.send("Added song '{}'.".format(song_name))
+
+    @bot.command()
+    async def remove(ctx, song_name):
+        """Removes a song from the database."""
+        try:
+            raspbot.remove_song(song_name)
+        except Exception as e:
+            await ctx.send("Error removing song: " + str(e))
+            return
+        await ctx.send("Removed song '{}'.".format(song_name))
+
+    @bot.command()
+    async def delete(ctx):
+        raspbot.remove(ctx)
+
+    @bot.command()
+    async def list(ctx):
+        """Lists all the songs in the database."""
+        try:
+            await ctx.send(raspbot.list_songs())
+        except Exception as e:
+            await ctx.send("Error listing songs: " + str(e))
+            return
+
+    @bot.command()
+    async def random(ctx):
+        """Randomly selects a song from the database."""
+        try:
+            await ctx.send(raspbot.random_song())
+        except Exception as e:
+            await ctx.send("Error getting random song: " + str(e))
+            return
+
+    ############################################################################
+    # HELPER METHODS
+    ############################################################################
+
+    @staticmethod
+    def add_song(name):
+        with sqlite3.connect("raspbot.db") as db:
+            try:
+                cur = db.cursor()
+                cur.execute("""INSERT INTO songs (name) VALUES (?)""", [name])
+            except Exception as e:
+                db.rollback()
+                raise e
+
+    @staticmethod
+    def remove_song(name):
+        with sqlite3.connect("raspbot.db") as db:
+            try:
+                cur = db.cursor()
+                cur.execute("""DELETE FROM songs WHERE name = ?""", [name])
+            except Exception as e:
+                db.rollback()
+                raise e
+
+    @staticmethod
+    def list_songs():
+        rows = None
+        with sqlite3.connect("raspbot.db") as db:
+            try:
+                cur = db.cursor()
+                cur.execute("""SELECT name FROM songs""")
+                rows = cur.fetchall()
+            except Exception as e:
+                db.rollback()
+                raise e
+        table = ""
+        for row in rows:
+            table += row[0] + "\n"
+        return table if table else "No songs yet."
+
+    @staticmethod
+    def random_song():
+        with sqlite3.connect("raspbot.db") as db:
+            try:
+                cur = db.cursor()
+                cur.execute("""SELECT name FROM songs""")
+                rows = cur.fetchall()
+            except Exception as e:
+                db.rollback()
+                raise e
+        return rows[random.randrange(len(rows))][0] if rows else "No songs yet."
+
+    @staticmethod
+    def setup(self):
+        """CREATE TABLE songs (name TEXT(100) PRIMARY KEY);"""
+        pass
 
     def run(self):
         """ This overrides the daemon run method."""

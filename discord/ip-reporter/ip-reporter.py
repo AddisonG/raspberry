@@ -31,7 +31,7 @@ class ip_bot(daemon):
                     await channel.send(ip_bot.get_ip())
                     break
 
-    @bot.command()
+    @bot.command
     async def ip(ctx):
         """Prints the bots IP address."""
         await ctx.send(ip_bot.get_ip())
