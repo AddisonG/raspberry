@@ -1,22 +1,16 @@
 [Unit]
-Description=Raspbot
-
-# Attempt to restart service forever
+Description=raspbot
 StartLimitIntervalSec=0
 
 [Service]
-Type=forking
 User=pi
-
-# See daemon.py
+Type=forking
 PIDFile=/run/user/1000/raspbot/pid
-
-# Attempt to restart stopped service every X seconds
-RestartSec=30
+RestartSec=60
 Restart=always
 ExecStart=/home/pi/projects/discord/raspbot/raspbot.py start
 ExecStop=/home/pi/projects/discord/raspbot/raspbot.py stop
+ExecReload=/home/pi/projects/discord/raspbot/raspbot.py restart
 
 [Install]
 WantedBy=multi-user.target
-#Alias=

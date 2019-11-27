@@ -20,8 +20,10 @@ class raspbot(daemon):
 
     start_time = time.time()
     TOKEN = 'NjM2NTQ4NzQ5OTIwODI5NDUw.XbBQdA.egeyn13aaU7slBz9339fKivQpUs'
-    bot = commands.Bot(command_prefix="?",
-        description="Generic bot for misc reporting and testing.")
+    bot = commands.Bot(
+        command_prefix="",
+        description="Generic bot for misc reporting and testing."
+    )
 
     @bot.event
     async def on_ready():
@@ -58,7 +60,8 @@ class raspbot(daemon):
 
     @bot.command(name='delete')
     async def delete(ctx):
-        raspbot.remove(ctx)
+        """Removes a song from the database."""
+        await raspbot.remove(ctx)
 
     @bot.command(name='list')
     async def list_all(ctx):
@@ -214,11 +217,15 @@ if command == "start":
     instance.start()
 elif command == "stop":
     instance.stop()
+elif command == "enable":
+    instance.enable()
+elif command == "disable":
+    instance.disable()
 elif command == "restart":
     instance.restart()
-elif command == "debug":
+elif command in ("debug", "test"):
     # Run without daemonizing
     instance.run()
 else:
-    print("Usage: {} [start|stop|restart]".format(sys.argv[0]))
+    print("Usage: {} [start|stop|restart|enable|disable]".format(sys.argv[0]))
     sys.exit(1)
