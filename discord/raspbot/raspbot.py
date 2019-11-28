@@ -1,6 +1,7 @@
 #!/usr/bin/python3.7
 
 from discord.ext import commands
+import re
 import sys
 import time
 import subprocess
@@ -22,6 +23,7 @@ class raspbot(daemon):
     TOKEN = 'NjM2NTQ4NzQ5OTIwODI5NDUw.XbBQdA.egeyn13aaU7slBz9339fKivQpUs'
     bot = commands.Bot(
         command_prefix="",
+        case_insensitive=True,
         description="Generic bot for misc reporting and testing."
     )
 
@@ -48,7 +50,7 @@ class raspbot(daemon):
             return
         await ctx.send("Added song '{}'.".format(song_name))
 
-    @bot.command(name='remove')
+    @bot.command(name='remove', aliases=['delete'])
     async def remove(ctx, *, song_name):
         """Removes a song from the database."""
         try:
@@ -58,32 +60,36 @@ class raspbot(daemon):
             return
         await ctx.send("Removed song '{}'.".format(song_name))
 
-    @bot.command(name='delete')
-    async def delete(ctx):
-        """Removes a song from the database."""
-        await raspbot.remove(ctx)
+    @bot.command(name='good robot', aliases=['good bot'])
+    async def good_robot(ctx):
+        """Tell the robot she has done a good job."""
+        await ctx.send("Thankyou master!")
+
+    @bot.command(name='bad robot', aliases=['bad robot!', 'bad bot', 'bad bot!'])
+    async def bad_robot(ctx):
+        """Tell the robot she has done a bad job."""
+        await ctx.send("I'm sorry master! UwU")
 
     @bot.command(name='list')
     async def list_all(ctx):
         """Lists all the songs in the database."""
-        try:
-            await ctx.send(raspbot.list_songs())
-        except Exception as e:
-            await ctx.send("Error listing songs: " + str(e))
-            return
+        songs_list = raspbot.list_songs().splitlines()
+        random.shuffle(songs_list)
+
+        print(re.findall(r'[\s\S]\n', "\n".join(songs_list)))
+        # Use regex to break song list into fragments <2000 in length.
+        for songs_fragment in re.findall(r'[\s\S]{1,2000}\n', "\n".join(songs_list)):
+            await ctx.send(songs_fragment)
+        await ctx.send("===============\nListed {} songs".format(len(songs_list)))
 
     @bot.command()
     async def random(ctx, *tags):
         """Randomly selects a song from the database, with the given tag.
         Please only supply one tag - only the first is read."""
-        try:
-            if tags:
-                await ctx.send(raspbot.random_song(tags[0]))
-            else:
-                await ctx.send(raspbot.random_song())
-        except Exception as e:
-            await ctx.send("Error getting random song: " + str(e))
-            return
+        if tags:
+            await ctx.send(raspbot.random_song(tags[0]))
+        else:
+            await ctx.send(raspbot.random_song())
 
     ############################################################################
     # HELPER METHODS
