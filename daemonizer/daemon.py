@@ -5,11 +5,7 @@ Generic linux daemon base class for python 3.
 Based on https://gist.github.com/andreif/cbb71b0498589dac93cb
 """
 
-from sys import (
-    stdin,
-    stdout,
-    stderr
-)
+from sys import stdin, stdout, stderr
 import os
 import time
 import atexit
@@ -26,8 +22,7 @@ FORK_ERROR = 98
 UNKNOWN_ERROR = 99
 
 
-class daemon:
-
+class Daemon(object):
     """A generic daemon class.
 
     Usage: subclass the daemon class and override the run() method."""
@@ -81,14 +76,14 @@ class daemon:
 
         # write pid_file
         os.makedirs(os.path.dirname(self.pid_file), exist_ok=True, mode=0o755)
-        atexit.register(self.delpid)
+        atexit.register(self._delpid)
         with open(self.pid_file, "w+") as f:
             f.write(str(os.getpid()) + "\n")
 
-    def delpid(self):
+    def _delpid(self):
         os.remove(self.pid_file)
 
-    def start(self):
+    def daemon_start(self):
         """Start the daemon."""
 
         # Check for a pid_file to see if the daemon is already running
@@ -107,7 +102,7 @@ class daemon:
         self.daemonize()
         self.run()
 
-    def stop(self):
+    def daemon_stop(self):
         """Stop the daemon."""
 
         # Get the pid from the pid_file
@@ -132,7 +127,7 @@ class daemon:
                 print(str(err.args))
                 exit(1)
 
-    def enable(self):
+    def daemon_enable(self):
         filename = self.name + ".service"
         service_file = """\
 [Unit]
@@ -169,8 +164,11 @@ WantedBy=multi-user.target
             logging.error(e)
             exit(UNKNOWN_ERROR)
         return
+        # ALSO NEED TO RUN: sudo systemctl enable raspbot
+        # OUTPUT:
+        # Created symlink /etc/systemd/system/multi-user.target.wants/raspbot.service → /home/pi/projects/discord/raspbot/raspbot.service.
 
-    def disable(self):
+    def daemon_disable(self):
         filename = self.name + ".service"
         try:
             logging.debug("Removing systemd service file: '%s'.", filename)
@@ -185,10 +183,10 @@ WantedBy=multi-user.target
             logging.error(e)
             exit(UNKNOWN_ERROR)
 
-    def restart(self):
+    def daemon_restart(self):
         """Restart the daemon."""
-        self.stop()
-        self.start()
+        self.daemon_stop()
+        self.daemon_start()
 
     def run(self):
         print("Override the run() method in daemon.py to daemonize a process.")
@@ -196,4 +194,4 @@ WantedBy=multi-user.target
         """You should override this method when you subclass Daemon.
 
         It will be called after the process has been daemonized by
-        start() or restart()."""
+        daemon_start() or daemon_restart()."""

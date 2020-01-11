@@ -1,15 +1,15 @@
 #!/usr/bin/python3.7
 
-from discord.ext import commands
 import socket
 import requests
 import sys
 
-sys.path.append('/home/pi/projects/daemonizer')
-from daemon import daemon
+from discord.ext import commands
+
+from daemonizer.daemon import Daemon
 
 
-class ip_bot(daemon):
+class IpBot(Daemon):
     """
     This bot reports the Local and Global IP Address of the server it's
     running on to a discord channel.
@@ -20,7 +20,7 @@ class ip_bot(daemon):
 
     @bot.event
     async def on_ready():
-        bot = ip_bot.bot
+        bot = IpBot.bot
         print('Logged in as:')
         print(bot.user.name + " (" + str(bot.user.id) + ")")
         print('-------------')
@@ -28,13 +28,13 @@ class ip_bot(daemon):
         for guild in bot.guilds:
             for channel in guild.text_channels:
                 if channel.permissions_for(guild.me).send_messages:
-                    await channel.send(ip_bot.get_ip())
+                    await channel.send(IpBot.get_ip())
                     break
 
-    @bot.command
+    @bot.command(name='ip')
     async def ip(ctx):
         """Prints the bots IP address."""
-        await ctx.send(ip_bot.get_ip())
+        await ctx.send(IpBot.get_ip())
 
     @staticmethod
     def get_ip():
@@ -45,7 +45,7 @@ class ip_bot(daemon):
 
     def run(self):
         """ This overrides the daemon run method."""
-        ip_bot.bot.run(ip_bot.TOKEN)
+        IpBot.bot.run(IpBot.TOKEN)
         print("Bot shutdown.")
 
 
@@ -53,22 +53,22 @@ class ip_bot(daemon):
 # Actually run the bot
 # ============================================================================
 
-instance = ip_bot("ip-reporter")
+instance = IpBot("ip-reporter")
+command = sys.argv[1] if len(sys.argv) == 2 else None
 
-if len(sys.argv) == 1:
-    print("Usage: " + sys.argv[0] + " [start|stop|restart]")
-    sys.exit(1)
-
-command = sys.argv[1]
 if command == "start":
-    instance.start()
+    instance.daemon_start()
 elif command == "stop":
-    instance.stop()
+    instance.daemon_stop()
+elif command == "enable":
+    instance.daemon_enable()
+elif command == "disable":
+    instance.daemon_disable()
 elif command == "restart":
-    instance.restart()
-elif command == "debug":
+    instance.daemon_restart()
+elif command in ("debug", "test"):
     # Run without daemonizing
     instance.run()
 else:
-    print("Usage: " + sys.argv[0] + " [start|stop|restart]")
+    print("Usage: {} [start|stop|restart|enable|disable]".format(sys.argv[0]))
     sys.exit(1)

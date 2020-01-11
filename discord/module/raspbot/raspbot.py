@@ -1,6 +1,5 @@
-#!/usr/bin/python3.7
+#!/usr/bin/python3
 
-from discord.ext import commands
 import re
 import sys
 import time
@@ -8,11 +7,12 @@ import subprocess
 import sqlite3
 import random
 
-sys.path.append('/home/pi/projects/daemonizer')
-from daemon import daemon
+from discord.ext import commands
+
+from daemonizer.daemon import Daemon
 
 
-class raspbot(daemon):
+class Raspbot(Daemon):
     """
     This bot encapsulates miscellaneous and half-baked functionality. I expect
     that many partially developed features will live here for long periods of
@@ -60,15 +60,26 @@ class raspbot(daemon):
             return
         await ctx.send("Removed song '{}'.".format(song_name))
 
-    @bot.command(name='good robot', aliases=['good bot'])
+    @bot.command(name='good')
     async def good_robot(ctx):
         """Tell the robot she has done a good job."""
-        await ctx.send("Thankyou master!")
+        gratitude = [
+            "Thankyou master!",
+            "I live to serve you, master!",
+            "Praise me more master!",
+            "S-senpai? You noticed me!",
+        ]
+        await ctx.send(random.choice(gratitude))
 
-    @bot.command(name='bad robot', aliases=['bad robot!', 'bad bot', 'bad bot!'])
+    @bot.command(name='bad')
     async def bad_robot(ctx):
         """Tell the robot she has done a bad job."""
-        await ctx.send("I'm sorry master! UwU")
+        sorrow = [
+            "I'm sorry master! UwU",
+            "Ugguuuuu~~",
+            "I'll try harder next time, master!",
+        ]
+        await ctx.send(random.choice(sorrow))
 
     @bot.command(name='list')
     async def list_all(ctx):
@@ -213,22 +224,18 @@ class raspbot(daemon):
 # ============================================================================
 
 instance = raspbot("raspbot")
+command = sys.argv[1] if len(sys.argv) == 2 else None
 
-if len(sys.argv) == 1:
-    print("Usage: {} [start|stop|restart]".format(sys.argv[0]))
-    sys.exit(1)
-
-command = sys.argv[1]
 if command == "start":
-    instance.start()
+    instance.daemon_start()
 elif command == "stop":
-    instance.stop()
+    instance.daemon_stop()
 elif command == "enable":
-    instance.enable()
+    instance.daemon_enable()
 elif command == "disable":
-    instance.disable()
+    instance.daemon_disable()
 elif command == "restart":
-    instance.restart()
+    instance.daemon_restart()
 elif command in ("debug", "test"):
     # Run without daemonizing
     instance.run()
