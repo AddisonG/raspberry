@@ -2,25 +2,28 @@
 
 import asyncio
 import discord
-import json
 import logging
+import json
+import sys
 import re
+
 from datetime import datetime
 from signal import SIGINT, SIGTERM
-from command import Command
+from discord import Message
 
+from discord_bot.base.command import Command
 from daemonizer.daemon import Daemon
 
-class Bot(object):
-    def __init__(self, loop, log):
-        with open("conf.json", "r") as f:
+class Bot(Daemon):
+    def __init__(self, name: str):
+        super().__init__(name)
+        with open(sys.path[0] + "/conf.json", "r") as f:
             self.conf = json.loads(f.read())
 
-        self.loop = loop
-        self.log = log
+        self.loop = asyncio.get_event_loop()
 
         # Main parts of the bot
-        self.client = discord.Client(loop=loop)
+        self.client = discord.Client(loop=self.loop)
 
         # Websocket handlers
         self.client.event(self.on_ready)
@@ -28,25 +31,25 @@ class Bot(object):
 
         # Store commands
         self.commands = dict()
-        self.add_command("stats", self._stats, self.log)
-        self.add_command("help", self._help, self.log)
-        self.add_command("info", self._info, self.log)
-        self.add_command("source", self._source, self.log)
+        self.add_command("stats", self._stats)
+        self.add_command("help", self._help)
+        self.add_command("info", self._info)
+        self.add_command("source", self._source)
 
         self._start_time = datetime.now()
 
     def add_command(self, *args, **kwargs):
         cmd = Command(*args, **kwargs)
         self.commands[cmd.name] = cmd
-        self.log.info("Added command %s", cmd)
+        logging.info("Added command %s", cmd)
 
-    def remove_command(self, name):
+    def remove_command(self, name: str):
         try:
             del self.commands[name]
         except KeyError:
-            self.log.error("No such command: %s", name)
+            logging.error("No such command: %s", name)
 
-    async def start(self):
+    async def bot_start(self):
         await self.client.login(self.conf["token"])
 
         try:
@@ -54,22 +57,22 @@ class Bot(object):
         except discord.ClientException as exc:
             error = "Something broke, I'm out!\n"
             error += "```{}```".format(str(exc))
-            self.log.error(error)
+            logging.error(error)
             await self.client.send(
                 discord.User(id=self.conf["admin_id"]),
                 error
             )
-            self.stop_signal()
+            self._stop_signal()
 
-    async def stop(self):
+    async def bot_stop(self):
         await self.client.logout()
 
-    def stop_signal(self):
-        self.log.info("Closing")
-        f = asyncio.ensure_future(self.stop())
+    def _stop_signal(self):
+        logging.info("Closing")
+        f = asyncio.ensure_future(self.bot_stop())
 
         def end(res):
-            self.log.info("Ending loop")
+            logging.info("Ending loop")
             self.loop.call_soon_threadsafe(self.loop.stop)
 
         f.add_done_callback(end)
@@ -77,11 +80,9 @@ class Bot(object):
     # Websocket handlers
 
     async def on_ready(self):
-        self.log.info("READY")
-        print("READY")
-        pass
+        logging.info("Bot Ready")
 
-    async def on_message(self, message):
+    async def on_message(self, message: Message):
         # If invite in private message, join server
         if self.conf["scrap_invites"]:
             if message.channel.is_private:
@@ -90,21 +91,21 @@ class Bot(object):
                     message.content)
                 if match and match.group(1):
                     await self.client.accept_invite(match.group(1))
-                    self.log.info("Joined server, invite %s", match.group(1))
+                    logging.info("Joined server, invite %s", match.group(1))
                     await message.author.send("Joined it, thanks :)")
                     return
 
         data = message.content.split(" ")
-        cmd = self.commands.get(data[0])
+        cmd = self.commands.get(data[0].lower())
         if not cmd:
-            self.log.debug("%s not a command", data[0])
+            logging.debug("%s not a command", data[0])
             return
         elif cmd.admin and message.author.id != self.conf["admin_id"]:
-            self.log.warning("cmd %s requires admin", cmd)
+            logging.warning("cmd %s requires admin", cmd)
             return
 
         # Go on.
-        self.log.info("Found command %s, calling it", cmd)
+        logging.info("Calling command: '%s'.", cmd)
         await cmd.call(message)
 
     # Commands
@@ -116,7 +117,7 @@ class Bot(object):
         """
         pass
 
-    async def _help(self, message):
+    async def _help(self, message: Message):
         """Print the help message"""
         msg = "Commands:"
         for command in self.commands.values():
@@ -129,16 +130,16 @@ class Bot(object):
 
         await message.channel.send(msg)
 
-    async def _info(self, message):
+    async def _info(self, message: Message):
         """Print your id"""
-        await message.channel.send("Your id: `%s`" % message.author.id)
+        await message.channel.send("Your id: `{}`".format(message.author.id))
 
-    async def _source(self, message):
+    async def _source(self, message: Message):
         """Show the bot"s github link"""
         await message.channel.send("Original: https://github.com/gdraynz/discord-bot")
         await message.channel.send("Modified: https://github.com/AddisonG/raspberry")
 
-    async def _stats(self, message):
+    async def _stats(self, message: Message):
         """Show the bot"s general stats"""
         users = 0
         for s in self.client.servers:
@@ -149,16 +150,10 @@ class Bot(object):
         msg += "Uptime : {}`\n".format(get_time_string((datetime.now() - self._start_time).total_seconds()))
         await message.channel.send(msg)
 
-class BotRunner(object):
-    def run(self, bot_class):
-        loop = asyncio.get_event_loop()
-        log = logging.getLogger(__name__)
+    def run(self):
+        self.loop.add_signal_handler(SIGINT, self._stop_signal)
+        self.loop.add_signal_handler(SIGTERM, self._stop_signal)
 
-        bot = bot_class(loop, log)
-
-        loop.add_signal_handler(SIGINT, bot.stop_signal)
-        loop.add_signal_handler(SIGTERM, bot.stop_signal)
-
-        asyncio.ensure_future(bot.start())
-        loop.run_forever()
-        loop.close()
+        asyncio.ensure_future(self.bot_start())
+        self.loop.run_forever()
+        self.loop.close()

@@ -29,7 +29,7 @@ class Raspbot(Daemon):
 
     @bot.event
     async def on_ready():
-        bot = raspbot.bot
+        bot = Raspbot.bot
         print('Logged in as:')
         print(bot.user.name + " (" + str(bot.user.id) + ")")
         print('-------------')
@@ -41,20 +41,20 @@ class Raspbot(Daemon):
                     break
 
     @bot.command()
-    async def add(ctx, *, song_name):
+    async def add(ctx, *, song_name: str):
         """Adds a song to the database."""
         try:
-            raspbot.add_song(song_name)
+            Raspbot.add_song(song_name)
         except Exception as e:
             await ctx.send("Error adding song: " + str(e))
             return
         await ctx.send("Added song '{}'.".format(song_name))
 
     @bot.command(name='remove', aliases=['delete'])
-    async def remove(ctx, *, song_name):
+    async def remove(ctx, *, song_name: str):
         """Removes a song from the database."""
         try:
-            raspbot.remove_song(song_name)
+            Raspbot.remove_song(song_name)
         except Exception as e:
             await ctx.send("Error removing song: " + str(e))
             return
@@ -84,7 +84,7 @@ class Raspbot(Daemon):
     @bot.command(name='list')
     async def list_all(ctx):
         """Lists all the songs in the database."""
-        songs_list = raspbot.list_songs().splitlines()
+        songs_list = Raspbot.list_songs().splitlines()
         random.shuffle(songs_list)
 
         print(re.findall(r'[\s\S]\n', "\n".join(songs_list)))
@@ -98,9 +98,9 @@ class Raspbot(Daemon):
         """Randomly selects a song from the database, with the given tag.
         Please only supply one tag - only the first is read."""
         if tags:
-            await ctx.send(raspbot.random_song(tags[0]))
+            await ctx.send(Raspbot.random_song(tags[0]))
         else:
-            await ctx.send(raspbot.random_song())
+            await ctx.send(Raspbot.random_song())
 
     ############################################################################
     # HELPER METHODS
@@ -215,7 +215,7 @@ class Raspbot(Daemon):
 
     def run(self):
         """ This overrides the daemon run method."""
-        raspbot.bot.run(raspbot.TOKEN)
+        Raspbot.bot.run(Raspbot.TOKEN)
         print("Raspbot shutting down.")
 
 
@@ -223,7 +223,7 @@ class Raspbot(Daemon):
 # Actually run the bot
 # ============================================================================
 
-instance = raspbot("raspbot")
+instance = Raspbot("raspbot")
 command = sys.argv[1] if len(sys.argv) == 2 else None
 
 if command == "start":
