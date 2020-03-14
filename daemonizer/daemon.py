@@ -23,20 +23,29 @@ UNKNOWN_ERROR = 99
 
 
 class Daemon(object):
-    """A generic daemon class.
+    """
+    A generic daemon class.
 
-    Usage: subclass the daemon class and override the run() method."""
+    Usage: subclass the daemon class and override the run() method.
+    """
 
     def __init__(self, name: str):
         self.name = name
         self.pid_file = "/run/user/{}/{}/pid".format(str(os.getuid()), name)
 
         # Set up logging
-        logging.basicConfig()
-        logging.getLogger().setLevel(logging.INFO)
+        log_format = "%(asctime)s [%(levelname)s] - %(message)s"
+        date_format = "%Y-%m-%d %H:%M:%S"
+        logging.basicConfig(
+            level=logging.INFO,
+            format=log_format,
+            datefmt=date_format
+        )
 
     def daemonize(self):
-        """Daemonize class. UNIX double fork mechanism."""
+        """
+        Daemonize class. UNIX double fork mechanism.
+        """
 
         # First fork
         try:
@@ -84,7 +93,9 @@ class Daemon(object):
         os.remove(self.pid_file)
 
     def daemon_start(self):
-        """Start the daemon."""
+        """
+        Start the daemon.
+        """
 
         # Check for a pid_file to see if the daemon is already running
         try:
@@ -103,7 +114,9 @@ class Daemon(object):
         self.run()
 
     def daemon_stop(self):
-        """Stop the daemon."""
+        """
+        Stop the daemon.
+        """
 
         # Get the pid from the pid_file
         try:
@@ -128,6 +141,10 @@ class Daemon(object):
                 exit(1)
 
     def daemon_enable(self):
+        """
+        Enable this daemon to run as a service.
+        """
+
         filename = self.name + ".service"
         service_file = """\
 [Unit]
@@ -169,6 +186,7 @@ WantedBy=multi-user.target
         # Created symlink /etc/systemd/system/multi-user.target.wants/raspbot.service → /home/pi/projects/discord/raspbot/raspbot.service.
 
     def daemon_disable(self):
+        """Disable this daemon from running as a service."""
         filename = self.name + ".service"
         try:
             logging.debug("Removing systemd service file: '%s'.", filename)

@@ -5,6 +5,10 @@ import logging
 import re
 
 class Command(object):
+    """
+    Object for storing command triggers and the function that is triggered.
+    """
+
     def __init__(self, name: str, handler, admin=False, regexp=r""):
         self.name = name
         self.admin = admin
@@ -19,6 +23,10 @@ class Command(object):
         return self.name
 
     async def call(self, message):
+        """
+        Calls this command, with the arguments provided in the message.
+        """
+
         data = " ".join(message.content.split(" ")[2:])
         if self.regexp:
             logging.info("Regexp required for command %s", self)
@@ -27,8 +35,6 @@ class Command(object):
                 logging.error("Regexp failed")
                 return
             logging.debug("kwargs for cmd: %s", match.groupdict())
-            logging.info("Calling handler with kwargs for command %s", self)
             await self.handler(message, **match.groupdict())
         else:
-            logging.info("Calling handler for command %s", self)
             await self.handler(message)

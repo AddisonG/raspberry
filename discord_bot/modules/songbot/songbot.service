@@ -1,0 +1,16 @@
+[Unit]
+Description=songbot
+StartLimitIntervalSec=0
+
+[Service]
+User=pi
+Type=forking
+PIDFile=/run/user/1000/songbot/pid
+RestartSec=60
+Restart=always
+ExecStart=/home/pi/projects/discord_bot/modules/songbot/songbot.py start
+ExecStop=/home/pi/projects/discord_bot/modules/songbot/songbot.py stop
+ExecReload=/home/pi/projects/discord_bot/modules/songbot/songbot.py restart
+
+[Install]
+WantedBy=multi-user.target
