@@ -70,11 +70,11 @@ class Bot(Daemon):
         await self.client.logout()
 
     def _stop_signal(self):
-        logging.info("Closing")
+        logging.warn("Recieved stop signal.")
         f = asyncio.ensure_future(self.bot_stop())
 
         def end(res):
-            logging.info("Ending loop")
+            logging.info("Stopping loop.")
             self.bot_loop.call_soon_threadsafe(self.bot_loop.stop)
 
         f.add_done_callback(end)
@@ -143,6 +143,7 @@ class Bot(Daemon):
             "I live to serve you, master!",
             "Praise me more master!",
             "S-senpai? You noticed me!",
+            "Arigatou!",
         ]
         await message.channel.send(random.choice(gratitude))
 
@@ -156,6 +157,8 @@ class Bot(Daemon):
             "I'll try harder next time, master!",
             "Uwah! Master is scary when he's mad!",
             "Sumimasen deshita (╥_╥)",
+            "P-Please don't punish me!",
+            "Gomenasai!"
         ]
         await message.channel.send(random.choice(sorrow))
 

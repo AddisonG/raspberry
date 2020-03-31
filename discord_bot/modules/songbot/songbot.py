@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import traceback
+import logging
 import gspread
 import random
 import sys
@@ -88,18 +90,23 @@ class SongBot(Bot):
         """
         Reloads the song database.
         """
+        message = "Reloaded data."
         # Display "Bot is typing a message" while it loads
         async with message.channel.typing():
-            await self.load_songs()
-        await message.channel.send("Reloaded data!")
+            try:
+                await self.load_songs()
+            except Exception as e:
+                message = "Failed to reload data. See logs for error."
+                logging.error("{}\n{}".format(type(e), str(e)))
+        await message.channel.send(message)
 
     async def load_songs(self):
         """
         (Re)loads the songs.
-        This is a back-end function. It has no output.
+        This is a back-end function. It has no output. It may throw exceptions.
         """
         gscope = ["https://www.googleapis.com/auth/drive"]
-        gcreds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", gscope)
+        gcreds = ServiceAccountCredentials.from_json_keyfile_name(sys.path[0] + "/credentials.json", gscope)
         gclient = gspread.authorize(gcreds)
         gsheet = gclient.open("Rowan's Songs").get_worksheet(0)
         self.song_list = gsheet.get_all_records()
@@ -112,11 +119,16 @@ class SongBot(Bot):
 
     async def on_ready(self):
         await super().on_ready()
-        await self.load_songs()
+        greeting = "Songbot ready!"
+        try:
+            await self.load_songs()
+        except Exception as e:
+            greeting = "Fatal: Could not load songs. See logs for error. Songbot not ready!"
+            logging.error("ERR: {}\n{}".format(type(e), str(e), traceback.format_exc()))
         for guild in self.client.guilds:
             for channel in guild.text_channels:
                 if channel.permissions_for(guild.me).send_messages:
-                    await channel.send("Songbot ready!")
+                    await channel.send(greeting)
 
 
 # ============================================================================
@@ -130,7 +142,8 @@ if __name__ == "__main__":
     if command == "start":
         instance.daemon_start()
     elif command == "stop":
-        instance.daemon_stop()
+        status = instance.daemon_stop()
+        exit(status)
     elif command == "enable":
         instance.daemon_enable()
     elif command == "disable":

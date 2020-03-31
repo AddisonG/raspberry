@@ -7,10 +7,12 @@ Based on https://gist.github.com/andreif/cbb71b0498589dac93cb
 
 from sys import stdin, stdout, stderr
 import os
+import sys
 import time
 import atexit
 import signal
 import logging
+import setproctitle
 
 # Normal exit codes
 SUCCESS = 0
@@ -30,13 +32,19 @@ class Daemon(object):
     """
 
     def __init__(self, name: str):
+        uid = os.getuid()
         self.name = name
-        self.pid_file = "/run/user/{}/{}/pid".format(str(os.getuid()), name)
+        self.pid_file = f"/run/user/{uid}/{name}/pid"
+
+        # Change the process title
+        setproctitle.setproctitle(name)
 
         # Set up logging
         log_format = "%(asctime)s [%(levelname)s] - %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
         logging.basicConfig(
+            filename=f"{sys.path[0]}/{name}.log",
+            filemode="a",
             level=logging.INFO,
             format=log_format,
             datefmt=date_format
@@ -83,7 +91,7 @@ class Daemon(object):
         os.dup2(so.fileno(), stdout.fileno())
         os.dup2(se.fileno(), stderr.fileno())
 
-        # write pid_file
+        # Create pid_file
         os.makedirs(os.path.dirname(self.pid_file), exist_ok=True, mode=0o755)
         atexit.register(self._delpid)
         with open(self.pid_file, "w+") as f:
@@ -96,7 +104,6 @@ class Daemon(object):
         """
         Start the daemon.
         """
-
         # Check for a pid_file to see if the daemon is already running
         try:
             with open(self.pid_file, "r") as pf:
@@ -105,8 +112,8 @@ class Daemon(object):
             pid = None
 
         if pid:
-            message = "pid_file '%s' already exists (pid %s). Daemon already running?\n"
-            logging.error(message, self.pid_file, pid)
+            message = f"pid_file '{self.pid_file}' already exists (pid {str(pid)}). Daemon already running?"
+            logging.error(message)
             exit(1)
 
         # Start the daemon
@@ -115,17 +122,17 @@ class Daemon(object):
 
     def daemon_stop(self):
         """
-        Stop the daemon.
+        Stop the daemon. Returns exit status.
         """
-
         # Get the pid from the pid_file
         try:
             with open(self.pid_file, "r") as pf:
                 pid = int(pf.read().strip())
         except IOError:
-            message = "pid_file '%s' does not exist. Daemon not running?\n"
-            logging.error(message, self.pid_file)
-            return  # not an error in a restart
+            message = f"pid_file '{self.pid_file}' does not exist. Daemon not running?"
+            logging.error(message)
+            print(message)
+            return 1
 
         # Try killing the daemon process
         try:
@@ -138,13 +145,13 @@ class Daemon(object):
                     os.remove(self.pid_file)
             else:
                 print(str(err.args))
-                exit(1)
+                return 1
+        return 0
 
     def daemon_enable(self):
         """
         Enable this daemon to run as a service.
         """
-
         filename = self.name + ".service"
         service_file = """\
 [Unit]
@@ -166,10 +173,10 @@ WantedBy=multi-user.target
 """
         try:
             fd = open(filename, "w+")
-            logging.debug("Writing file '%s'.", filename)
+            logging.debug(f"Writing file '{filename}'.")
             fd.write(service_file.format(service_name=self.name, cwd=os.getcwd()))
             os.chmod(filename, 0o644)
-            logging.debug("Linking file '%s'.", filename)
+            logging.debug(f"Linking file '{filename}'.")
             os.symlink("{}/{}".format(os.getcwd(), filename), "/etc/systemd/system/" + filename)
         except FileExistsError as e:
             logging.info("The service is already enabled.")
@@ -180,16 +187,17 @@ WantedBy=multi-user.target
         except Exception as e:
             logging.error(e)
             exit(UNKNOWN_ERROR)
-        return
         # ALSO NEED TO RUN: sudo systemctl enable raspbot
         # OUTPUT:
-        # Created symlink /etc/systemd/system/multi-user.target.wants/raspbot.service → /home/pi/projects/discord/raspbot/raspbot.service.
+        # Created symlink /etc/systemd/system/multi-user.target.wants/my.service → /home/me/my.service.
 
     def daemon_disable(self):
-        """Disable this daemon from running as a service."""
+        """
+        Disable this daemon from running as a service.
+        """
         filename = self.name + ".service"
         try:
-            logging.debug("Removing systemd service file: '%s'.", filename)
+            logging.debug(f"Removing systemd service file: '{filename}'.")
             os.remove("/etc/systemd/system/" + filename)
         except FileNotFoundError as e:
             logging.warn("The service is already disabled.")
@@ -200,16 +208,21 @@ WantedBy=multi-user.target
         except Exception as e:
             logging.error(e)
             exit(UNKNOWN_ERROR)
+        exit()
 
     def daemon_restart(self):
-        """Restart the daemon."""
+        """
+        Restart the daemon.
+        """
         self.daemon_stop()
         self.daemon_start()
 
     def run(self):
-        print("Override the run() method in daemon.py to daemonize a process.")
-        exit(1)
-        """You should override this method when you subclass Daemon.
+        """
+        Override this method when subclassing `Daemon`.
 
         It will be called after the process has been daemonized by
-        daemon_start() or daemon_restart()."""
+        `daemon_start()` or `daemon_restart()`.
+        """
+        print("Override the run() method to daemonize a process.")
+        exit(1)
