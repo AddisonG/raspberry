@@ -16,6 +16,9 @@ from local_utilities.string_utils import titlecase
 class SongBot(Bot):
     """
     This bot comes up with songs for Rowan to sing.
+
+    TODO - make the bot suggest valid tags?
+    TODO - add, remove, tag songs
     """
 
     def __init__(self, *args, **kwargs):
@@ -40,7 +43,7 @@ class SongBot(Bot):
         filtered_songs = self.song_list
         for arg in message.content.split(" ")[1:]:
             arg = arg.lower()
-            filtered_songs = [song for song in filtered_songs if arg in (song["source"], song["tag_1"], song["tag_2"], song["tag_3"])]
+            filtered_songs = [song for song in filtered_songs if arg in (song["tag_1"], song["tag_2"], song["tag_3"]) or arg in song["source"]]
 
         if not filtered_songs:
             await message.channel.send("No songs found")
@@ -90,15 +93,15 @@ class SongBot(Bot):
         """
         Reloads the song database.
         """
-        message = "Reloaded data."
+        response = "Reloaded data."
         # Display "Bot is typing a message" while it loads
         async with message.channel.typing():
             try:
                 await self.load_songs()
             except Exception as e:
-                message = "Failed to reload data. See logs for error."
+                response = "Failed to reload data. See logs for error."
                 logging.error("{}\n{}".format(type(e), str(e)))
-        await message.channel.send(message)
+        await message.channel.send(response)
 
     async def load_songs(self):
         """
@@ -151,8 +154,9 @@ if __name__ == "__main__":
     elif command == "restart":
         instance.daemon_restart()
     elif command == "status":
+        # TODO
+        print("TODO - Not yet implemented")
         pass
-        # TODO - might be nice?
     elif command in ("debug", "test"):
         # Run without daemonizing
         instance.run()

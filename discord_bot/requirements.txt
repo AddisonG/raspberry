@@ -1,0 +1,4 @@
+gspread
+discord
+oauth2client
+setproctitle

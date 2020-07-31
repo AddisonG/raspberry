@@ -7,6 +7,7 @@ import random
 import json
 import sys
 import re
+import os
 
 from datetime import datetime
 from signal import SIGINT, SIGTERM
@@ -18,7 +19,12 @@ from daemonizer.daemon import Daemon
 class Bot(Daemon):
     def __init__(self, name: str):
         super().__init__(name)
-        with open(sys.path[0] + "/conf.json", "r") as f:
+        config_file = sys.path[0] + "/conf.json"
+        if not os.path.isfile(config_file):
+            # No conf.json - The bot doesn't know what token, etc to use
+            # TODO: Maybe I should make a default one?
+            raise Exception("All bots require a config file. Create one at: {}".format(config_file))
+        with open(config_file, "r") as f:
             self.bot_conf = json.loads(f.read())
 
         self.bot_loop = asyncio.get_event_loop()
@@ -70,7 +76,7 @@ class Bot(Daemon):
         await self.client.logout()
 
     def _stop_signal(self):
-        logging.warn("Recieved stop signal.")
+        logging.warn("Received stop signal.")
         f = asyncio.ensure_future(self.bot_stop())
 
         def end(res):
@@ -142,6 +148,7 @@ class Bot(Daemon):
             "Thankyou master!",
             "I live to serve you, master!",
             "Praise me more master!",
+            "Your joy is my fulfilment!",
             "S-senpai? You noticed me!",
             "Arigatou!",
         ]

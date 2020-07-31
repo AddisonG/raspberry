@@ -14,6 +14,8 @@ import signal
 import logging
 import setproctitle
 
+from local_utilities.logging_utils import begin_logging_to_stdout
+
 # Normal exit codes
 SUCCESS = 0
 REDUNDANT_COMMAND = 1
@@ -152,8 +154,10 @@ class Daemon(object):
         """
         Enable this daemon to run as a service.
         """
+        begin_logging_to_stdout()
+
         filename = self.name + ".service"
-        service_file = """\
+        file_contents = """\
 [Unit]
 Description={service_name}
 StartLimitIntervalSec=0
@@ -164,20 +168,20 @@ Type=forking
 PIDFile=/run/user/1000/{service_name}/pid
 RestartSec=60
 Restart=always
-ExecStart={cwd}/{service_name}.py start
-ExecStop={cwd}/{service_name}.py stop
-ExecReload={cwd}/{service_name}.py restart
+ExecStart={dir}/{service_name}.py start
+ExecStop={dir}/{service_name}.py stop
+ExecReload={dir}/{service_name}.py restart
 
 [Install]
 WantedBy=multi-user.target
 """
         try:
             fd = open(filename, "w+")
-            logging.debug(f"Writing file '{filename}'.")
-            fd.write(service_file.format(service_name=self.name, cwd=os.getcwd()))
+            logging.debug(f"Writing file '{sys.path[0]}/{filename}'.")
+            fd.write(file_contents.format(service_name=self.name, dir=sys.path[0]))
             os.chmod(filename, 0o644)
-            logging.debug(f"Linking file '{filename}'.")
-            os.symlink("{}/{}".format(os.getcwd(), filename), "/etc/systemd/system/" + filename)
+            logging.debug("Creating link in /etc/systemd/system/.")
+            os.symlink("{}/{}".format(sys.path[0], filename), "/etc/systemd/system/" + filename)
         except FileExistsError as e:
             logging.info("The service is already enabled.")
             exit(REDUNDANT_COMMAND)
@@ -187,7 +191,8 @@ WantedBy=multi-user.target
         except Exception as e:
             logging.error(e)
             exit(UNKNOWN_ERROR)
-        # ALSO NEED TO RUN: sudo systemctl enable raspbot
+        logging.info(f"Remember to run 'sudo systemctl enable {self.name}'.")
+        # ALSO NEED TO RUN: sudo systemctl enable <service_name>
         # OUTPUT:
         # Created symlink /etc/systemd/system/multi-user.target.wants/my.service → /home/me/my.service.
 
@@ -195,6 +200,7 @@ WantedBy=multi-user.target
         """
         Disable this daemon from running as a service.
         """
+        begin_logging_to_stdout()
         filename = self.name + ".service"
         try:
             logging.debug(f"Removing systemd service file: '{filename}'.")
