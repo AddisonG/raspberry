@@ -26,6 +26,7 @@ class SongBot(Bot):
 
         self.add_bot_command("random", self.random_song)
         self.add_bot_command("another", self.another_song)
+        self.add_bot_command("again", self.another_song)
         self.add_bot_command("list", self.list_songs)
         self.add_bot_command("add", self.add_song)
         self.add_bot_command("delete", self.delete_song)
