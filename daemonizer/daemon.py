@@ -185,7 +185,7 @@ WantedBy=multi-user.target
         except FileExistsError as e:
             logging.info("The service is already enabled.")
             exit(REDUNDANT_COMMAND)
-        except PermissionError as e:
+        except PermissionError:
             logging.warn("Root permissions are required to enable a service.")
             exit(PERMISSION_DENIED)
         except Exception as e:
@@ -205,10 +205,10 @@ WantedBy=multi-user.target
         try:
             logging.debug(f"Removing systemd service file: '{filename}'.")
             os.remove("/etc/systemd/system/" + filename)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             logging.warn("The service is already disabled.")
             exit(REDUNDANT_COMMAND)
-        except PermissionError as e:
+        except PermissionError:
             logging.warn("Root permissions are required to disable a service.")
             exit(PERMISSION_DENIED)
         except Exception as e:

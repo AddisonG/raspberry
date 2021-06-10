@@ -128,7 +128,7 @@ class SongBot(Bot):
             await self.load_songs()
         except Exception as e:
             greeting = "Fatal: Could not load songs. See logs for error. Songbot not ready!"
-            logging.error("ERR: {}\n{}".format(type(e), str(e), traceback.format_exc()))
+            logging.error("ERR: {}\n{}\n{}".format(type(e), str(e), traceback.format_exc()))
         for guild in self.client.guilds:
             for channel in guild.text_channels:
                 if channel.permissions_for(guild.me).send_messages:

@@ -23,15 +23,18 @@ else
 	exit 1
 fi
 
+set -euo pipefail
+
 # Install / Uninstall
 for package in "${!packages[@]}"; do
 	name="${packages[$package]}"
 	read -p "${command} ${name}? <y/N> " prompt
 	if [[ "${prompt}" == "y" || "${prompt}" == "Y" || "${prompt}" == "yes" || "${prompt}" == "Yes" ]]; then
 		if [[ "${command}" == "Install" ]]; then
-			sudo ln -siT "${script_location}/${package}" "/usr/lib/python3/dist-packages/${package}"
+			sudo ln -sfT "${script_location}/${package}" "/usr/lib/python3/dist-packages/${package}"
 		else
 			sudo rm "/usr/lib/python3/dist-packages/${package}"
 		fi
+		echo "Done"
 	fi
 done

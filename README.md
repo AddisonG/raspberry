@@ -2,6 +2,19 @@
 
 ## Running the code
 
+Install the python packages with the interactive installer. Some depend on each other, so it's wise to install all of them.
+
+```
+./install --install / --uninstall
+```
+
+## Getting services to work (enable/disable)
+
+You'll need to run the enable command as root. Also see `/etc/systemd/system/`.
+
+
+## Rant
+
 Fuck python package managment. It enforces a structure that means importing packages from anywhere except sub-directories is impossible to do without hacky fixes, such as:
 
 ```
@@ -26,10 +39,11 @@ or even:
 from ....my_other_package import
 from ...my_package import
 ```
- - Okay, it's not that bad, but...
- - Fuck you. IT FEELS HACKY
+ - It doesn't work between packages
+ - Lots of `ImportError: attempted relative import with no known parent package`
+ - Feels hacky
 
-The above are all blasphemous, and I will not have it in my codebase. Imports should always look the same. Furthermore, code should be able to be run from any directory, wherever it is run from.
+The above are all blasphemous, and I will not have them in my codebase. Imports should always look the same. Furthermore, code should work flawlessly regardless of the cwd.
 
 If you want this code to work, you'll have to install my code as a package.
 
@@ -50,9 +64,4 @@ sudo ln -siT /path/to/raspberry/projects/daemonizer /usr/lib/python3/dist-packag
 sudo ln -siT /path/to/raspberry/projects/local_utilities /usr/lib/python3/dist-packages/local_utilities
 ```
 
-With this, these packages are able to be used by each other, and any other python code which may want to
-
-
-## Getting services to work (enable/disable)
-
-You'll need to run the enable command as root. Also see `/etc/systemd/system/`.
+With this, these packages are able to be used by each other, and by other packages too.
