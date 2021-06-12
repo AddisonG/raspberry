@@ -15,7 +15,7 @@ def simple_logging(filename, level=logging.INFO, stdout=False):
     logging.basicConfig(
         filename=f"{get_script_path()}/{filename}.log",
         filemode="a",
-        level=logging.INFO,
+        level=level,
         format=LOG_FORMAT,
         datefmt=DATE_FORMAT,
     )

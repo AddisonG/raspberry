@@ -4,14 +4,15 @@ import cv2
 import logging
 import pathlib
 import argparse
+from decimal import Decimal
 from datetime import datetime, timedelta
 
 from local_utilities.logging_utils import simple_logging
 
 
-DEBUG = True
-simple_logging("streamwatch", stdout=True)
+simple_logging("streamwatch", level=logging.DEBUG, stdout=True)
 
+MAX_STABILITY = 10
 
 class StreamWatch():
     def __init__(self,
@@ -22,12 +23,15 @@ class StreamWatch():
                  prefix: str,
                  video_path: str,
                  image_path: str,
+                 debug: bool,
                 ):
         self.url = url
         self.output_fps = fps
         self.speed = speed or 1
         self.duration = duration or None
         self.prefix = prefix or ""
+        self.debug = debug or False
+        self.visualise = False
 
         # TODO - test different codecs out?
         self.codec = cv2.VideoWriter_fourcc(*'DIVX')
@@ -70,6 +74,7 @@ class StreamWatch():
         )
 
         frame_num = 0
+        stability = MAX_STABILITY
 
         # TODO - LOTS of debug output here
         logging.info(f"Streaming from '{self.url}' ({stream_width}x{stream_height} - {stream_fps}FPS).")
@@ -79,27 +84,30 @@ class StreamWatch():
             ret, frame = cap.read()
 
             # Write to video file
-            if frame_num % max(1, stream_fps / self.output_fps) < 1:
+            if frame_num % (Decimal(stream_fps) / Decimal(self.output_fps)) < 1:
                 # Record every "xth" frame, to satisfy the FPS limit.
                 logging.debug(f"Recording frame #{frame_num} to video.")
                 video_writer.write(frame)
 
-            # Error handling
+            # Error handling + Stability monitoring
             if not ret:
-                logging.error("Failed to read frame from stream.")
-                break
-            if frame is None or frame.size == 0:
-                logging.error("Bad/blank frame.")
-                break
+                logging.warning("Failed to read frame from stream.")
+                stability -= 1
+            elif frame is None or frame.size == 0:
+                logging.warning("Bad/blank frame.")
+                stability -= 1
+            elif stability < MAX_STABILITY:
+                # Successfully processing a frame increases stability
+                stability = min(stability + 1, MAX_STABILITY)
             if datetime.now() > self.finish_time:
                 logging.info("Duration is up. Exiting.")
                 break
+            if stability <= 0:
+                # If stability is too low, give up and exit
+                logging.fatal("Connection is too unstable. Exiting.")
+                break
 
-            if (DEBUG):
-                # Visualise the feed for the user in realtime
-                cv2.imshow("frame", frame)
-                if cv2.waitKey(20) & 0xFF == ord('q'):
-                    break
+            self.show_frame(frame)
 
             frame_num += 1
 
@@ -117,8 +125,12 @@ class StreamWatch():
     def save_video(self):
         return
 
-    def visualise(self):
-        return
+    def show_frame(self, frame):
+        # Visualise the feed for the user in realtime
+        if (self.visualise):
+            cv2.imshow("frame", frame)
+            if cv2.waitKey(10) & 0xFF == ord('q'):
+                raise Exception("User pressed 'q', exiting.")
 
 
 if __name__ == "__main__":
@@ -135,6 +147,8 @@ if __name__ == "__main__":
         help="The path to save videos to. No video is saved without this.")
     parser.add_argument("--image-path", "-i", type=str,
         help="The path to save images to. No images are saved without this.")
+    parser.add_argument("--debug", "-x", type=str,
+        help="Enable debugging,")
 
     args = parser.parse_args()
 
@@ -146,4 +160,5 @@ if __name__ == "__main__":
         prefix=args.prefix,
         video_path=args.video_path,
         image_path=args.image_path,
+        debug=args.debug,
     )
