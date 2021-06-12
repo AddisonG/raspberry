@@ -49,7 +49,7 @@ class Daemon(object):
             filemode="a",
             level=logging.INFO,
             format=log_format,
-            datefmt=date_format
+            datefmt=date_format,
         )
 
     def daemonize(self):
@@ -182,11 +182,11 @@ WantedBy=multi-user.target
             os.chmod(filename, 0o644)
             logging.debug("Creating link in /etc/systemd/system/.")
             os.symlink("{}/{}".format(sys.path[0], filename), "/etc/systemd/system/" + filename)
-        except FileExistsError as e:
+        except FileExistsError:
             logging.info("The service is already enabled.")
             exit(REDUNDANT_COMMAND)
         except PermissionError:
-            logging.warn("Root permissions are required to enable a service.")
+            logging.warning("Root permissions are required to enable a service.")
             exit(PERMISSION_DENIED)
         except Exception as e:
             logging.error(e)
@@ -206,10 +206,10 @@ WantedBy=multi-user.target
             logging.debug(f"Removing systemd service file: '{filename}'.")
             os.remove("/etc/systemd/system/" + filename)
         except FileNotFoundError:
-            logging.warn("The service is already disabled.")
+            logging.warning("The service is already disabled.")
             exit(REDUNDANT_COMMAND)
         except PermissionError:
-            logging.warn("Root permissions are required to disable a service.")
+            logging.warning("Root permissions are required to disable a service.")
             exit(PERMISSION_DENIED)
         except Exception as e:
             logging.error(e)

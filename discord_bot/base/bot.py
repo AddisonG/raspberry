@@ -76,7 +76,7 @@ class Bot(Daemon):
         await self.client.logout()
 
     def _stop_signal(self):
-        logging.warn("Received stop signal.")
+        logging.warning("Received stop signal.")
         f = asyncio.ensure_future(self.bot_stop())
 
         def end(res):

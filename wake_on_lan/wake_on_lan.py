@@ -20,8 +20,8 @@ broadcast = ['192.168.1.255', '192.168.0.255']
 wol_port = 9
 
 known_computers = {
-    'addison'      : '70:85:c2:7c:13:96',
-    'addison-wifi' : '18:d6:c7:87:9d:35',
+    'addison': '70:85:c2:7c:13:96',
+    'addison-wifi': '18:d6:c7:87:9d:35',
 }
 
 def WakeOnLan(ethernet_address):
@@ -32,12 +32,15 @@ def WakeOnLan(ethernet_address):
         print "\n*** Illegal MAC address\n"
         print "MAC should be written as 00:11:22:33:44:55\n"
         return
-    hwa = struct.pack('BBBBBB', int(add_oct[0],16),
-        int(add_oct[1],16),
-        int(add_oct[2],16),
-        int(add_oct[3],16),
-        int(add_oct[4],16),
-        int(add_oct[5],16))
+    hwa = struct.pack(
+        'BBBBBB',
+        int(add_oct[0], 16),
+        int(add_oct[1], 16),
+        int(add_oct[2], 16),
+        int(add_oct[3], 16),
+        int(add_oct[4], 16),
+        int(add_oct[5], 16)
+    )
 
     # Build magic packet
 
@@ -46,10 +49,11 @@ def WakeOnLan(ethernet_address):
     # Send packet to broadcast address using UDP port 9
 
     soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    soc.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST,1)
+    soc.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     for i in broadcast:
-        soc.sendto(msg,(i,wol_port))
+        soc.sendto(msg, (i, wol_port))
     soc.close()
+
 
 if len(sys.argv) == 1:
     print "\n*** No computer given to power up\n"
