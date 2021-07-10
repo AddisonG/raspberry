@@ -19,45 +19,51 @@ MAX_STABILITY = 10
 class StreamWatch():
     def __init__(self,
                  url: str,
-                 fps: int,
-                 speed: int,
-                 duration: int,
-                 prefix: str,
-                 video_path: str,
-                 image_path: str,
-                 debug: bool,
+                 fps: int = None,
+                 speed: int = 1,
+                 duration: int = None,
+                 prefix: str = None,
+                 video_path: str = None,
+                 image_path: str = None,
+                 debug: bool = False,
+                 visualise: bool = False,
                 ):
+        # Deal with params
         self.url = url
         self.output_fps = fps
         self.speed = speed or 1
         self.duration = duration or None
+        self.video_path = video_path or "."
+        self.image_path = image_path or "."
         self.prefix = prefix or ""
         self.debug = debug or False
-        self.visualise = False
+        self.visualise = visualise or False
+
+        # Initialise internal variables
         self.video_writer = None
         self.recent_motion = 0
+        self.stability = MAX_STABILITY
 
-        # TODO - test different codecs out?
-        self.codec = cv2.VideoWriter_fourcc(*'DIVX')
-        # self.codec = cv2.VideoWriter_fourcc(*'XVID') # ???
-        # self.codec = cv2.VideoWriter_fourcc(*'MJPG') # big?
-        # self.codec = cv2.VideoWriter_fourcc(*'X264') # small?
-        # self.codec = cv2.VideoWriter_fourcc(*'h264') # the native codec of my camera? faster?
+        # Advanced customisation
+        self.codec = cv2.VideoWriter_fourcc(*'XVID')
+        # XVID, DIVX and MP4V all give identical output on my computer
+        # MJPG gives a huge file, about 4x - 6x the size of XVID
+        # X264 and H264 are not supported on my computer
+        # My camera/stream reports that it is supposedly using H264 encoding
+        # I don't know if this means it would be faster/better? Probably not
+
+        # Deal with start/end times
+        self.start_time = datetime.now()
+        self.finish_time = None
+        self.formatted_start_time = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
+        if self.duration:
+            self.finish_time = self.start_time + timedelta(seconds=self.duration)
+
+        self.output_video_file = f"{self.video_path}/{self.prefix}{self.formatted_start_time}.avi"
 
         # Create paths
         if image_path and pathlib.Path(image_path).exists():
             pathlib.Path(image_path).mkdir(parents=True, exist_ok=True)
-
-        self.video_path = video_path or "."
-        self.image_path = image_path or "."
-
-        self.start_time = datetime.now()
-        self.finish_time = None
-        if self.duration:
-            self.finish_time = self.start_time + timedelta(seconds=self.duration)
-
-        self.formatted_start_time = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
-        self.output_video_file = f"{self.video_path}/{self.prefix}{self.formatted_start_time}.avi"
 
         # Begin watching the stream
         self.watch()
@@ -71,46 +77,25 @@ class StreamWatch():
         if not self.output_fps:
             self.output_fps = self.stream_fps
 
-        frame_num = 0
-        stability = MAX_STABILITY
-
         # TODO - LOTS of debug output here
         logging.info(f"Streaming from '{self.url}' ({self.stream_width}x{self.stream_height} - {self.stream_fps}FPS).")
         logging.info(f"Recording to '{self.output_video_file}' at {self.speed}x speed ({self.output_fps} -> {self.output_fps * self.speed} FPS).")
 
+        frame_num = 0
         # TODO - Make this auto-adjust for FPS. Probably always 0.5 seconds?
         old_frames = [None] * 5
         while (cap.isOpened()):
             ret, frame = cap.read()
             frame_num += 1
 
-            # Error handling + Stability monitoring
-            if stability <= 0:
-                # If stability is too low, give up and exit
-                logging.fatal("Connection is too unstable. Exiting.")
-                break
-            if not ret:
-                logging.warning("Failed to read frame from stream.")
-                stability -= 1
+            if not self.stability_check(cap, ret, frame, frame_num):
                 continue
-            elif frame is None or frame.size == 0:
-                logging.warning("Bad/blank frame.")
-                stability -= 1
-                continue
-            elif stability < MAX_STABILITY:
-                # Successfully processing a frame increases stability
-                stability = min(stability + 1, MAX_STABILITY)
 
-            # Lag detection (CPU-bottlenecked devices)
-            stream_frame_num = cap.get(cv2.CAP_PROP_POS_FRAMES)
-            if frame_num != stream_frame_num:
-                logging.warning(f"LAGGING BEHIND FEED! THIS IS BAD!!! {frame_num} vs {stream_frame_num}.")
-                stream_ms = round(cap.get(cv2.CAP_PROP_POS_MSEC), 2)
-                logging.warning(f"The stream is apparently {stream_ms}ms in.")
+            # Keep track of the last x frames
+            old_frames.insert(0, frame)
 
             # Detect motion (compare to several frames ago)
             diff_frame = old_frames.pop()
-            old_frames.insert(0, frame)
             motion_area = image_utils.detect_motion(diff_frame, frame)
 
             self.handle_motion(motion_area)
@@ -127,44 +112,69 @@ class StreamWatch():
                 logging.info("Duration is up. Exiting.")
                 break
 
-        self.cleanup(cap, self.video_writer)
+        self.cleanup(cap)
 
-    def cleanup(self, cap: cv2.VideoCapture, video_writer: cv2.VideoWriter) -> None:
+    def cleanup(self, cap: cv2.VideoCapture) -> None:
         logging.info("Cleaning up")
-        if video_writer is not None:
-            video_writer.release()
+        if self.video_writer is not None:
+            self.video_writer.release()
         cap.release()
         cv2.destroyAllWindows()
 
     def save_image(self):
         return
 
+    def stability_check(self, cap, ret, frame, frame_num):
+        # Error handling + Stability monitoring
+        if self.stability <= 0:
+            # If stability is too low, give up and exit
+            logging.fatal("Connection is too unstable. Exiting.")
+            self.cleanup(cap)
+            raise Exception("Connection is too unstable. Exiting.")
+        if not ret:
+            logging.warning("Failed to read frame from stream.")
+            self.stability -= 1
+            return False
+        elif frame is None or frame.size == 0:
+            logging.warning("Bad/blank frame.")
+            self.stability -= 1
+            return False
+        elif self.stability < MAX_STABILITY:
+            # Successfully processing a frame increases stability
+            self.stability = min(self.stability + 1, MAX_STABILITY)
+
+        # Lag detection (CPU-bottlenecked devices)
+        stream_frame_num = cap.get(cv2.CAP_PROP_POS_FRAMES)
+        if frame_num != stream_frame_num:
+            logging.warning(f"LAGGING BEHIND FEED! THIS IS BAD!!! {frame_num} vs {stream_frame_num}.")
+            stream_ms = round(cap.get(cv2.CAP_PROP_POS_MSEC), 2)
+            logging.warning(f"The stream is apparently {stream_ms}ms in.")
+            # TODO - Actually do something about this? Reduce FPS?
+            return False
+        return True
+
     def handle_motion(self, motion_area):
         """
         recent_motion is a measure of how much motion there has been over
         the past few seconds. This value has a maximum value that it caps at.
 
-        If this value is 0, then there has been no recent motion.
+        If this value is already 0, then there has been no recent motion.
 
-        As soon as this value drops down to 0, a segment of recent motion is
-        said to have stopped.
+        As soon as this value drops down from 1 to 0, a segment of recent motion
+        is said to have stopped.
         """
         if not motion_area or motion_area == (0, 0, 0, 0):
             # No motion detected
             if self.recent_motion == 1:
-                logging.debug("Motion has stopped")
+                logging.info("Motion has stopped")
             self.recent_motion = max(0, self.recent_motion - 1)
         elif self.recent_motion == 0:
             # New motion detected
-            logging.debug("New motion detected")
-            # FIXME - base this on framerate
-            self.recent_motion = 15
+            logging.info("New motion detected")
+            self.recent_motion = self.stream_fps
         else:
             # Motion is continuing
-            # FIXME - base this on framerate
-            self.recent_motion = min(self.recent_motion + 1, 15)
-
-        #
+            self.recent_motion = min(self.recent_motion + 1, self.stream_fps)
 
     def save_video(self, frame, frame_num):
         # Create a new file to save the video to
