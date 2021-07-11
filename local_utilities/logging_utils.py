@@ -11,6 +11,7 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 def simple_logging(filename, level=logging.INFO, stdout=False):
     """
     Set up a simple logging config that logs to a file.
+    If 'stdout' is True, then INFO and above are also logged to stdout.
     """
     logging.basicConfig(
         filename=f"{get_script_path()}/{filename}.log",

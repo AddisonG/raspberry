@@ -32,13 +32,20 @@ class StreamWatch():
         self.url = url
         self.output_fps = fps
         self.speed = speed or 1
-        self.duration = duration or None
-        self.video_path = video_path or "."
-        self.image_path = image_path or "."
+        self.duration = duration
         self.prefix = prefix or ""
+        self.video_path = video_path
+        self.image_path = image_path
         self.debug = debug or False
         self.visualise = visualise or False
 
+        # Configure
+        self.setup()
+
+        # Begin watching the stream
+        self.watch()
+
+    def setup(self):
         # Initialise internal variables
         self.video_writer = None
         self.recent_motion = 0
@@ -55,18 +62,16 @@ class StreamWatch():
         # Deal with start/end times
         self.start_time = datetime.now()
         self.finish_time = None
-        self.formatted_start_time = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
         if self.duration:
             self.finish_time = self.start_time + timedelta(seconds=self.duration)
 
-        self.output_video_file = f"{self.video_path}/{self.prefix}{self.formatted_start_time}.avi"
+        self.formatted_start_time = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
+        if self.video_path:
+            self.output_video_file = f"{self.video_path}/{self.prefix}{self.formatted_start_time}.avi"
 
-        # Create paths
-        if image_path and pathlib.Path(image_path).exists():
-            pathlib.Path(image_path).mkdir(parents=True, exist_ok=True)
-
-        # Begin watching the stream
-        self.watch()
+        if self.image_path:
+            self.image_path += f"/{self.prefix}{self.formatted_start_time}/"
+            pathlib.Path(self.image_path).mkdir(parents=True, exist_ok=True)
 
     def watch(self) -> None:
         cap = cv2.VideoCapture(self.url)
@@ -77,9 +82,11 @@ class StreamWatch():
         if not self.output_fps:
             self.output_fps = self.stream_fps
 
-        # TODO - LOTS of debug output here
         logging.info(f"Streaming from '{self.url}' ({self.stream_width}x{self.stream_height} - {self.stream_fps}FPS).")
-        logging.info(f"Recording to '{self.output_video_file}' at {self.speed}x speed ({self.output_fps} -> {self.output_fps * self.speed} FPS).")
+        if self.video_path:
+            logging.info(f"Recording video to '{self.output_video_file}' at {self.speed}x speed ({self.output_fps} -> {self.output_fps * self.speed} FPS).")
+        if self.image_path:
+            logging.info(f"Recording images to '{self.image_path}'.")
 
         frame_num = 0
         # TODO - Make this auto-adjust for FPS. Probably always 0.5 seconds?
@@ -100,10 +107,9 @@ class StreamWatch():
 
             self.handle_motion(motion_area)
 
-            # Write to video
+            # Write frame to video and/or image
             self.save_video(frame, frame_num)
-
-            # TODO - Write to image
+            self.save_image(frame, frame_num)
 
             if self.visualise:
                 image_utils.show_image(frame, "Visualisation")
@@ -120,9 +126,6 @@ class StreamWatch():
             self.video_writer.release()
         cap.release()
         cv2.destroyAllWindows()
-
-    def save_image(self):
-        return
 
     def stability_check(self, cap, ret, frame, frame_num):
         # Error handling + Stability monitoring
@@ -177,10 +180,13 @@ class StreamWatch():
             self.recent_motion = min(self.recent_motion + 1, self.stream_fps)
 
     def save_video(self, frame, frame_num):
+        if not self.video_path:
+            return
+
         # Create a new file to save the video to
         if self.video_writer is None:
-            if self.video_path and pathlib.Path(self.video_path).exists():
-                pathlib.Path(self.video_path).mkdir(parents=True, exist_ok=True)
+            logging.debug(f"Initialising video file.")
+            pathlib.Path(self.video_path).mkdir(parents=True, exist_ok=True)
             self.video_writer = cv2.VideoWriter(
                 self.output_video_file,
                 self.codec,
@@ -192,6 +198,13 @@ class StreamWatch():
         if frame_num % (Decimal(self.stream_fps) / Decimal(self.output_fps)) < 1:
             logging.debug(f"Recording frame #{frame_num} to video.")
             self.video_writer.write(frame)
+
+    def save_image(self, frame, frame_num):
+        if not self.image_path:
+            return
+
+        logging.debug(f"Saving frame #{frame_num} as image.")
+        cv2.imwrite(self.image_path + f"{frame_num}.jpg", frame)
 
 
 if __name__ == "__main__":
