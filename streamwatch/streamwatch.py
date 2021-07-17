@@ -13,7 +13,7 @@ from local_utilities import image_utils
 
 simple_logging("streamwatch", level=logging.DEBUG, stdout=True)
 
-MAX_STABILITY = 10
+MAX_STABILITY = 5
 
 
 class StreamWatch():
@@ -26,7 +26,6 @@ class StreamWatch():
                  video_path: str = None,
                  image_path: str = None,
                  debug: bool = False,
-                 visualise: bool = False,
                 ):
         # Deal with params
         self.url = url
@@ -37,7 +36,6 @@ class StreamWatch():
         self.video_path = video_path
         self.image_path = image_path
         self.debug = debug or False
-        self.visualise = visualise or False
 
         # Configure
         self.setup()
@@ -79,6 +77,9 @@ class StreamWatch():
         self.stream_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.stream_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
+        # The scale is based on the smallest dimension. e.g: 1920x1080 = 10x
+        self.scale = min(self.stream_height, self.stream_width) // 100
+
         if not self.output_fps:
             self.output_fps = self.stream_fps
 
@@ -89,8 +90,7 @@ class StreamWatch():
             logging.info(f"Recording images to '{self.image_path}'.")
 
         frame_num = 0
-        # TODO - Make this auto-adjust for FPS. Probably always 0.5 seconds?
-        old_frames = [None] * 5
+        old_frames = [None] * max(self.stream_fps // 2, 1)
         while (cap.isOpened()):
             ret, frame = cap.read()
             frame_num += 1
@@ -98,12 +98,13 @@ class StreamWatch():
             if not self.stability_check(cap, ret, frame, frame_num):
                 continue
 
-            # Keep track of the last x frames
-            old_frames.insert(0, frame)
+            # Keep track of the last several frames
+            new_simple = image_utils.simplify_image(frame.copy(), greyscale=True, blur=True)
+            old_frames.insert(0, new_simple)
 
             # Detect motion (compare to several frames ago)
-            diff_frame = old_frames.pop()
-            motion_area = image_utils.detect_motion(diff_frame, frame)
+            old_frame = old_frames.pop()
+            motion_area = image_utils.detect_motion(old_frame, new_simple, self.scale)
 
             self.handle_motion(motion_area)
 
@@ -111,8 +112,15 @@ class StreamWatch():
             self.save_video(frame, frame_num)
             self.save_image(frame, frame_num)
 
-            if self.visualise:
-                image_utils.show_image(frame, "Visualisation")
+            if self.debug:
+                debug_frame = frame.copy()
+
+                # Print the biggest movement detected
+                (x, y, w, h) = motion_area
+                cv2.rectangle(debug_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+                cv2.putText(debug_frame, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), (1, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                image_utils.show_image(debug_frame, "Debug Visualisation")
 
             if self.finish_time is not None and datetime.now() > self.finish_time:
                 logging.info("Duration is up. Exiting.")
@@ -133,7 +141,7 @@ class StreamWatch():
             # If stability is too low, give up and exit
             logging.fatal("Connection is too unstable. Exiting.")
             self.cleanup(cap)
-            raise Exception("Connection is too unstable. Exiting.")
+            raise SystemExit("Connection is too unstable. Exiting.")
         if not ret:
             logging.warning("Failed to read frame from stream.")
             self.stability -= 1
@@ -143,7 +151,7 @@ class StreamWatch():
             self.stability -= 1
             return False
         elif self.stability < MAX_STABILITY:
-            # Successfully processing a frame increases stability
+            # Successfully processing a frame restores lost stability
             self.stability = min(self.stability + 1, MAX_STABILITY)
 
         # Lag detection (CPU-bottlenecked devices)
@@ -185,7 +193,7 @@ class StreamWatch():
 
         # Create a new file to save the video to
         if self.video_writer is None:
-            logging.debug(f"Initialising video file.")
+            logging.debug("Initialising video file.")
             pathlib.Path(self.video_path).mkdir(parents=True, exist_ok=True)
             self.video_writer = cv2.VideoWriter(
                 self.output_video_file,
