@@ -2,15 +2,24 @@
 
 import cv2
 import imutils
-import logging
-from numpy import ndarray as np_image
+from numpy import ndarray as np_image, array, uint8
+
+circle = array([
+    [0, 0, 1, 1, 1, 0, 0],
+    [0, 1, 1, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [0, 1, 1, 1, 1, 1, 0],
+    [0, 0, 1, 1, 1, 0, 0],
+], dtype=uint8)
 
 def simplify_image(image: np_image,
                    width: int = None,
                    blur: bool = False,
                    greyscale: bool = False,
                    outline: bool = False,
-                  ):
+                  ) -> np_image:
     """
     Simplify an image, by shrinking, blurring, greyscaling, outlining.
     """
@@ -25,6 +34,7 @@ def simplify_image(image: np_image,
 
     # Blur the image
     if blur:
+        # FIXME - Maybe base this on scale? Maybe not.
         image = cv2.GaussianBlur(image, (25, 25), 0)
 
     # Convert to outlines
@@ -33,7 +43,27 @@ def simplify_image(image: np_image,
 
     return image
 
-def detect_motion(old_image: np_image, new_image: np_image, scale):
+def is_greyscale(image: np_image) -> bool:
+    """
+    Sample every 100th pixel in each row and column of the image.
+    If they're all grey, then the image is probably greyscale.
+    """
+    if len(image.shape) == 2:
+        # Only height and width dimensions (no color dimension)
+        return True
+
+    height, width = image.shape[:2]
+
+    for col in range(0, width, 100):  # e.g: 1920
+        for row in range(0, height, 100):  # e.g: 1080
+            pixel = image[row][col]
+            # The RGB values must all be identical, or the pixel is non-grey
+            if not pixel[0] == pixel[1] == pixel[2]:
+                return False
+
+    return True
+
+def detect_motion(old_image: np_image, new_image: np_image, scale: float, sensitive: bool):
     """
     Compare two images. If there is motion, it will return a box around the
     largest area that had motion.
@@ -47,20 +77,20 @@ def detect_motion(old_image: np_image, new_image: np_image, scale):
         return (0, 0, 0, 0)
 
     if len(new_image.shape) >= 3:
-        logging.critical("Can only detect motion on greyscale images.")
         raise SystemExit("Can only detect motion on greyscale images.")
 
     # Find all areas that have changed from the original
     delta = cv2.absdiff(new_image, old_image)
 
     # Only keep areas that have changed by a significant value
-    _, delta = cv2.threshold(delta, 30, 255, cv2.THRESH_BINARY)
+    sensitity = 15 if sensitive else 40
+    _, delta = cv2.threshold(delta, sensitity, 255, cv2.THRESH_BINARY)
 
     # Dilate just expands/bleeds/dilates shapes. This means a tiny circle would
     # grow in size. A donut shape might expand to a large circle (with no hole).
     # FIXME - https://www.geeksforgeeks.org/erosion-dilation-images-using-opencv-python/
-    # FIXME - Please investigate using a kernel here instead of dozens of iterations
-    delta = cv2.dilate(delta, None, iterations=int(scale * 1.5))
+
+    delta = cv2.dilate(delta, circle, iterations=int(scale * 1.5))
 
     cnts = cv2.findContours(delta, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
@@ -69,7 +99,6 @@ def detect_motion(old_image: np_image, new_image: np_image, scale):
 
     for c in cnts:
         # Ignore areas that are too small
-        # FIXME - This should be adjusted for different resolutions? Don't hard-code!
         area = cv2.contourArea(c)
         if area < (200 * scale):
             continue

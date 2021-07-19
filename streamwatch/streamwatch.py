@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 
 import cv2
+import time
 import logging
 import pathlib
 import argparse
 from decimal import Decimal
 from datetime import datetime, timedelta
+from multiprocessing import Pipe, Process
 
 from local_utilities.logging_utils import simple_logging
-from local_utilities import image_utils
+from local_utilities import image_utils, image_saver
 
 
 simple_logging("streamwatch", level=logging.DEBUG, stdout=True)
 
 MAX_STABILITY = 5
+MAX_MOTION_SECONDS = 5
 
 
 class StreamWatch():
@@ -48,6 +51,7 @@ class StreamWatch():
         self.video_writer = None
         self.recent_motion = 0
         self.stability = MAX_STABILITY
+        self.nightvision = False
 
         # Advanced customisation
         self.codec = cv2.VideoWriter_fourcc(*'XVID')
@@ -91,6 +95,11 @@ class StreamWatch():
 
         frame_num = 0
         old_frames = [None] * max(self.stream_fps // 2, 1)
+        # TODO - is duplex faster or not? Is queue faster?
+        saving_pipe = Pipe()
+        p = Process(target=image_saver.image_saver, args=(saving_pipe,))
+        p.start()
+        saving_pipe[0].close()
         while (cap.isOpened()):
             ret, frame = cap.read()
             frame_num += 1
@@ -98,13 +107,22 @@ class StreamWatch():
             if not self.stability_check(cap, ret, frame, frame_num):
                 continue
 
+            saving_pipe[1].send(frame)
+
+            # Check if we're nightvision every few frames
+            if frame_num % self.stream_fps == 0 and self.nightvision != image_utils.is_greyscale(frame):
+                from_string, to_string = ("nightvision", "color") if self.nightvision else ("color", "nightvision")
+                logging.info(f"Changed from {from_string} to {to_string}.")
+                self.nightvision = (not self.nightvision)
+
             # Keep track of the last several frames
+            # FIXME - maybe don't blur nightvision images? The greys REALLY blend together
             new_simple = image_utils.simplify_image(frame.copy(), greyscale=True, blur=True)
             old_frames.insert(0, new_simple)
 
             # Detect motion (compare to several frames ago)
             old_frame = old_frames.pop()
-            motion_area = image_utils.detect_motion(old_frame, new_simple, self.scale)
+            motion_area = image_utils.detect_motion(old_frame, new_simple, self.scale, self.nightvision)
 
             self.handle_motion(motion_area)
 
@@ -120,20 +138,23 @@ class StreamWatch():
                 cv2.rectangle(debug_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
                 cv2.putText(debug_frame, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), (1, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(debug_frame, "Motion: " + str(self.recent_motion), (1, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
                 image_utils.show_image(debug_frame, "Debug Visualisation")
 
             if self.finish_time is not None and datetime.now() > self.finish_time:
                 logging.info("Duration is up. Exiting.")
                 break
 
-        self.cleanup(cap)
+        self.cleanup(cap, p)
 
-    def cleanup(self, cap: cv2.VideoCapture) -> None:
+    def cleanup(self, cap: cv2.VideoCapture, p) -> None:
         logging.info("Cleaning up")
         if self.video_writer is not None:
             self.video_writer.release()
         cap.release()
         cv2.destroyAllWindows()
+        p.join()
 
     def stability_check(self, cap, ret, frame, frame_num):
         # Error handling + Stability monitoring
@@ -173,6 +194,12 @@ class StreamWatch():
 
         As soon as this value drops down from 1 to 0, a segment of recent motion
         is said to have stopped.
+
+        TODO - Add a "threshold" here. A single frame of tiny movement should
+        not count as movement. Movement should be based on size as well.
+        A single frame of major movement might be enough to trigger the start
+        of movement, or several frames of small movement.
+        Consider categorising movement (small, medium, large)?
         """
         if not motion_area or motion_area == (0, 0, 0, 0):
             # No motion detected
@@ -182,10 +209,10 @@ class StreamWatch():
         elif self.recent_motion == 0:
             # New motion detected
             logging.info("New motion detected")
-            self.recent_motion = self.stream_fps
+            self.recent_motion = self.stream_fps * MAX_MOTION_SECONDS
         else:
             # Motion is continuing
-            self.recent_motion = min(self.recent_motion + 1, self.stream_fps)
+            self.recent_motion = min(self.recent_motion + MAX_MOTION_SECONDS, self.stream_fps * MAX_MOTION_SECONDS)
 
     def save_video(self, frame, frame_num):
         if not self.video_path:
