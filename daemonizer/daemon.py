@@ -7,14 +7,17 @@ Based on https://gist.github.com/andreif/cbb71b0498589dac93cb
 
 from sys import stdin, stdout, stderr
 import os
-import sys
 import time
 import atexit
 import signal
 import logging
 import setproctitle
 
-from local_utilities.logging_utils import begin_logging_to_stdout
+from local_utilities.logging_utils import (
+    simple_logging,
+    begin_logging_to_stdout,
+    get_script_path,
+)
 
 # Normal exit codes
 SUCCESS = 0
@@ -33,24 +36,17 @@ class Daemon(object):
     Usage: subclass the daemon class and override the run() method.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, description: str = None):
         uid = os.getuid()
         self.name = name
+        self.description = description or name
         self.pid_file = f"/run/user/{uid}/{name}/pid"
 
         # Change the process title
         setproctitle.setproctitle(name)
 
         # Set up logging
-        log_format = "%(asctime)s [%(levelname)s] - %(message)s"
-        date_format = "%Y-%m-%d %H:%M:%S"
-        logging.basicConfig(
-            filename=f"{sys.path[0]}/{name}.log",
-            filemode="a",
-            level=logging.INFO,
-            format=log_format,
-            datefmt=date_format,
-        )
+        simple_logging(name)
 
     def daemonize(self):
         """
@@ -159,7 +155,7 @@ class Daemon(object):
         filename = self.name + ".service"
         file_contents = """\
 [Unit]
-Description={service_name}
+Description={description}
 StartLimitIntervalSec=0
 
 [Service]
@@ -171,17 +167,22 @@ Restart=always
 ExecStart={dir}/{service_name}.py start
 ExecStop={dir}/{service_name}.py stop
 ExecReload={dir}/{service_name}.py restart
+SyslogIdentifier={service_name}
 
 [Install]
 WantedBy=multi-user.target
 """
         try:
             fd = open(filename, "w+")
-            logging.debug(f"Writing file '{sys.path[0]}/{filename}'.")
-            fd.write(file_contents.format(service_name=self.name, dir=sys.path[0]))
+            logging.debug(f"Writing file '{get_script_path()}/{filename}'.")
+            fd.write(file_contents.format(
+                service_name=self.name,
+                description=self.description,
+                dir=get_script_path(),
+            ))
             os.chmod(filename, 0o644)
             logging.debug("Creating link in /etc/systemd/system/.")
-            os.symlink("{}/{}".format(sys.path[0], filename), "/etc/systemd/system/" + filename)
+            os.symlink("{}/{}".format(get_script_path(), filename), "/etc/systemd/system/" + filename)
         except FileExistsError:
             logging.info("The service is already enabled.")
             exit(REDUNDANT_COMMAND)

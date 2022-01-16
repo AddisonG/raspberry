@@ -11,6 +11,7 @@ from discord import Message
 from oauth2client.service_account import ServiceAccountCredentials
 from discord_bot.base.bot import Bot
 from local_utilities.string_utils import titlecase
+from local_utilities.logging_utils import get_script_path
 
 
 class SongBot(Bot):
@@ -19,6 +20,7 @@ class SongBot(Bot):
 
     TODO - make the bot suggest valid tags?
     TODO - add, remove, tag songs
+    TODO - make the bot suggest songs randomly throughout the day?
     """
 
     def __init__(self, *args, **kwargs):
@@ -110,7 +112,7 @@ class SongBot(Bot):
         This is a back-end function. It has no output. It may throw exceptions.
         """
         gscope = ["https://www.googleapis.com/auth/drive"]
-        gcreds = ServiceAccountCredentials.from_json_keyfile_name(sys.path[0] + "/credentials.json", gscope)
+        gcreds = ServiceAccountCredentials.from_json_keyfile_name(get_script_path() + "/credentials.json", gscope)
         gclient = gspread.authorize(gcreds)
         gsheet = gclient.open("Rowan's Songs").get_worksheet(0)
         self.song_list = gsheet.get_all_records()

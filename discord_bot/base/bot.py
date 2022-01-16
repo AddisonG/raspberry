@@ -5,7 +5,6 @@ import discord
 import logging
 import random
 import json
-import sys
 import re
 import os
 
@@ -15,15 +14,21 @@ from discord import Message
 
 from discord_bot.base.command import Command
 from daemonizer.daemon import Daemon
+from local_utilities.logging_utils import get_script_path
 
 class Bot(Daemon):
     def __init__(self, name: str):
         super().__init__(name)
-        config_file = sys.path[0] + "/conf.json"
+        config_file = get_script_path() + "/conf.json"
         if not os.path.isfile(config_file):
             # No conf.json - The bot doesn't know what token, etc to use
-            # TODO: Maybe I should make a default one?
-            raise Exception("All bots require a config file. Create one at: {}".format(config_file))
+            with open(config_file, "w") as config:
+                config.write(json.dumps({
+                    "token": "ABCDEFGHIJKLMNOPQRSTUVWXYZ.ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+                    "admin_id": "123456789012345678",
+                    "scrap_invites": False,
+                }, indent=4))
+            raise SystemExit("All bots require a config file. Edit the newly created one at: {}".format(config_file))
         with open(config_file, "r") as f:
             self.bot_conf = json.loads(f.read())
 
@@ -68,7 +73,7 @@ class Bot(Daemon):
             logging.error(error)
             await self.client.send(
                 discord.User(id=self.bot_conf["admin_id"]),
-                error
+                error,
             )
             self._stop_signal()
 
@@ -151,6 +156,7 @@ class Bot(Daemon):
             "Your joy is my fulfilment!",
             "S-senpai? You noticed me!",
             "Arigatou!",
+            "You created me, so of course I'm amazing master!",
         ]
         await message.channel.send(random.choice(gratitude))
 
@@ -165,7 +171,8 @@ class Bot(Daemon):
             "Uwah! Master is scary when he's mad!",
             "Sumimasen deshita (╥_╥)",
             "P-Please don't punish me!",
-            "Gomenasai!"
+            "Gomenasai!",
+            "Sorry for all my bugs master :c",
         ]
         await message.channel.send(random.choice(sorrow))
 
