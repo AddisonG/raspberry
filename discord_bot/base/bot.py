@@ -78,7 +78,7 @@ class Bot(Daemon):
             self._stop_signal()
 
     async def bot_stop(self):
-        await self.client.logout()
+        await self.client.close()
 
     def _stop_signal(self):
         logging.warning("Received stop signal.")
