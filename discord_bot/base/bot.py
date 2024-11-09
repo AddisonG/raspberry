@@ -35,7 +35,11 @@ class Bot(Daemon):
         self.bot_loop = asyncio.get_event_loop()
 
         # Main parts of the bot
-        self.client = discord.Client(loop=self.bot_loop)
+        intents = discord.Intents.default()
+        # intents.members = True
+        intents.messages = True
+        intents.message_content = True
+        self.client = discord.Client(loop=self.bot_loop, intents=intents)
 
         # Websocket handlers
         self.client.event(self.on_ready)

@@ -6,3 +6,4 @@ conf.json
 credentials.json
 *.log
 node_modules/
+openai-api.key
